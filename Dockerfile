@@ -1,28 +1,38 @@
-# שלב 1: שימוש בדמות Node.js יציבה
-FROM node:18-slim
+# שלב 1: בנייה
+FROM node:20-slim AS builder
 
-# התקנת תלויות מערכת נחוצות
+# התקנת pnpm ודרישות מערכת לבנייה
+RUN npm install -g pnpm
 RUN apt-get update && apt-get install -y \
     python3 \
     make \
     g++ \
+    bash \
     && rm -rf /var/lib/apt/lists/*
 
-# יצירת תיקיית עבודה
 WORKDIR /app
 
-# העתקת קבצי הגדרות התלויות
-COPY package*.json ./
+# העתקת קבצי הגדרות
+COPY pnpm-lock.yaml package.json ./
 
-# התקנת התלויות (כולל שלב הבנייה של Scramjet)
-RUN npm install
+# התקנת תלויות
+RUN pnpm install --frozen-lockfile
 
-# העתקת שאר קבצי הפרויקט
+# העתקת כל שאר הקבצים
 COPY . .
 
-# הגדרת משתנה סביבה לפורט (חשוב לשרתי ענן)
-ENV PORT=8080
+# שלב קריטי ב-Scramjet: בניית ה-Rewriter וה-Assets
+RUN pnpm run build
+
+# שלב 2: הרצה (כדי שהמכונה תהיה קלה ומהירה)
+FROM node:20-slim
+RUN npm install -g pnpm
+WORKDIR /app
+
+# העתקת רק מה שצריך להרצה מהשלב הקודם
+COPY --from=builder /app /app
+
 EXPOSE 8080
 
-# הפקודה שמריצה את המנוע האחורי
+# הפעלת השרת (לפי ה-scripts ב-package.json שלך)
 CMD ["node", "server.js"]
